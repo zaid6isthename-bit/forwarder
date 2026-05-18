@@ -1,0 +1,34 @@
+[
+  {
+    "id": "fwd-1",
+    "name": "Alex Mercer",
+    "company": "Global Cargo Solutions",
+    "email": "alex.mercer@globalcargosolutions.example.com",
+    "phone": "+1-555-0198",
+    "notes": "Excellent air freight rates. Quick responses."
+  },
+  {
+    "id": "fwd-2",
+    "name": "Sarah Connor",
+    "company": "Apex Shippers",
+    "email": "sconnor@apexshippers.example.com",
+    "phone": "+44-20-7946-0958",
+    "notes": "Specializes in European sea cargo and DDP incoterms."
+  },
+  {
+    "id": "fwd-3",
+    "name": "Vikram Singh",
+    "company": "Indo-Pacific Logistics",
+    "email": "operations@indopacificlogistics.example.com",
+    "phone": "+91-22-5550-1234",
+    "notes": "Reliable road transport across India & customs clearance support."
+  },
+  {
+    "id": "fwd-4",
+    "name": "Elena Rostova",
+    "company": "Eurasia Freight Alliance",
+    "email": "elena.r@eurasiafreight.example.com",
+    "phone": "+49-89-2019-3829",
+    "notes": "Specializes in sensitive, perishable and fragile shipments."
+  }
+]
