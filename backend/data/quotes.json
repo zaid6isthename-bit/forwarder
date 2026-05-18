@@ -49,9 +49,9 @@
     "readyDate": "2026-05-25",
     "specialInstructions": "Requires temperature-controlled pharma container between 2-8°C. Priority transit requested.",
     "deadline": "2026-05-21",
-    "status": "Pending",
+    "status": "Sent",
     "createdAt": "2026-05-17T11:45:00.000Z",
-    "forwardersEmailedCount": 0
+    "forwardersEmailedCount": 4
   },
   {
     "id": "quote-1779068288668",
