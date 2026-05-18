@@ -93,9 +93,9 @@ export default function NewQuote({ showToast, onViewHistory }) {
         <p className="text-sm text-[#4B3A2A] mt-1">Fill in cargo details and submit — bid emails go to all <strong>{fwdCount}</strong> registered forwarders instantly.</p>
       </div>
 
-      <form onSubmit={handleSubmit} className="bg-white border border-[#FFE5CC] rounded-2xl p-8 shadow-sm space-y-8">
+      <form onSubmit={handleSubmit} className="bg-white border border-[#FFE5CC] rounded-2xl p-6 sm:p-8 shadow-sm space-y-8">
         {/* Ref ID banner */}
-        <div className="flex items-center justify-between p-4 bg-[#FFF1E0] border border-[#FFE5CC] rounded-xl">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between p-4 bg-[#FFF1E0] border border-[#FFE5CC] rounded-xl gap-3">
           <div className="flex items-center gap-2">
             <FileText className="w-5 h-5 text-[#F97316]" />
             <div>
@@ -103,7 +103,7 @@ export default function NewQuote({ showToast, onViewHistory }) {
               <span className="font-mono font-bold text-sm text-[#1C1009]">{refId}</span>
             </div>
           </div>
-          <span className="text-[10px] bg-[#F97316] text-white px-2.5 py-1 rounded-full font-bold uppercase">Auto-Generated</span>
+          <span className="text-[10px] bg-[#F97316] text-white px-2.5 py-1 rounded-full font-bold uppercase self-start sm:self-auto">Auto-Generated</span>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -160,12 +160,12 @@ export default function NewQuote({ showToast, onViewHistory }) {
           <textarea rows={3} className={inp} placeholder="Temperature requirements, stacking restrictions, priority handling…" value={form.specialInstructions} onChange={e=>set('specialInstructions',e.target.value)} />
         </div>
 
-        <div className="flex items-center justify-between pt-4 border-t border-[#FFE5CC]">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between pt-4 border-t border-[#FFE5CC] gap-4">
           <p className="text-xs text-[#8C7560] font-semibold">
             Will email <span className="text-[#F97316] font-bold text-sm">{fwdCount}</span> registered agencies.
           </p>
           <button type="submit" disabled={submitting}
-            className="flex items-center gap-2 bg-[#F97316] hover:bg-[#EA580C] text-white px-8 py-3 rounded-xl font-bold text-sm transition-all shadow-sm disabled:opacity-60">
+            className="w-full sm:w-auto flex items-center justify-center gap-2 bg-[#F97316] hover:bg-[#EA580C] text-white px-8 py-3 rounded-xl font-bold text-sm transition-all shadow-sm disabled:opacity-60">
             {submitting
               ? <><svg className="animate-spin h-4 w-4" fill="none" viewBox="0 0 24 24"><circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"/><path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/></svg> Sending…</>
               : <><Send className="w-4 h-4"/> Dispatch Bids</>}

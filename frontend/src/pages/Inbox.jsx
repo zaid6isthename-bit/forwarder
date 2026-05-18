@@ -130,44 +130,44 @@ export default function Inbox({ showToast }) {
   const fastestBid = bids.find(b => b.isFastest);
 
   return (
-    <div className="h-full flex gap-6 overflow-hidden max-h-screen">
+    <div className="h-full flex flex-col lg:flex-row gap-4 lg:gap-6 lg:overflow-hidden lg:max-h-screen">
       
       {/* ── LEFT SIDEBAR: Active Quotes ── */}
-      <div className="w-64 shrink-0 flex flex-col space-y-4">
+      <div className="w-full lg:w-64 shrink-0 flex flex-col space-y-2 lg:space-y-4">
         <h3 className="text-xs font-bold uppercase tracking-wider text-[#1C1009] px-2 flex items-center gap-2">
-          <InboxIcon className="w-4 h-4 text-[#F97316]"/> Bid Inbox
+          <InboxIcon className="w-4 h-4 text-[#F97316]"/> <span className="lg:inline hidden">Bid Inbox</span><span className="lg:hidden">Select RFQ</span>
         </h3>
         
-        <div className="bg-white border border-[#FFE5CC] rounded-2xl p-2 shadow-sm flex flex-col gap-1 overflow-y-auto max-h-full scrollbar-thin">
+        <div className="bg-white border border-[#FFE5CC] rounded-2xl p-2 shadow-sm flex flex-row lg:flex-col gap-2 overflow-x-auto lg:overflow-y-auto max-h-full scrollbar-thin snap-x">
           {quotes.map(q => {
             const isActive = q.id === activeQuoteId;
             return (
               <button 
                 key={q.id}
                 onClick={() => setActiveQuoteId(q.id)}
-                className={`w-full text-left p-3 rounded-xl transition-all duration-200 border ${
-                  isActive ? 'bg-[#FFF8F0] border-[#F97316] shadow-sm' : 'border-transparent hover:bg-[#FFFBF5]'
+                className={`w-48 lg:w-full shrink-0 text-left p-3 rounded-xl transition-all duration-200 border snap-center ${
+                  isActive ? 'bg-[#FFF8F0] border-[#F97316] shadow-sm' : 'border-[#FFE5CC] lg:border-transparent hover:bg-[#FFFBF5]'
                 }`}
               >
                 <div className="flex justify-between items-center mb-1">
                   <span className={`font-mono text-xs font-bold ${isActive ? 'text-[#F97316]' : 'text-[#1C1009]'}`}>{q.referenceId}</span>
-                  {isActive && <div className="w-1.5 h-1.5 rounded-full bg-[#F97316]"></div>}
+                  {isActive && <div className="w-1.5 h-1.5 rounded-full bg-[#F97316] shrink-0"></div>}
                 </div>
                 <div className="text-[10px] text-[#8C7560] truncate">{q.origin} → {q.destination}</div>
               </button>
             )
           })}
-          {quotes.length === 0 && <p className="p-4 text-xs text-[#8C7560] text-center">No active RFQs</p>}
+          {quotes.length === 0 && <p className="p-4 text-xs text-[#8C7560] text-center w-full">No active RFQs</p>}
         </div>
       </div>
 
       {/* ── MAIN INBOX AREA ── */}
-      <div className="flex-1 flex flex-col min-w-0 overflow-y-auto scrollbar-thin pb-20 pr-2">
+      <div className="flex-1 flex flex-col min-w-0 lg:overflow-y-auto scrollbar-thin lg:pb-20 lg:pr-2">
         {activeQuote ? (
           <>
-            <div className="flex justify-between items-end mb-6">
+            <div className="flex flex-col sm:flex-row sm:justify-between items-start sm:items-end gap-4 mb-6 mt-2 lg:mt-0">
               <div>
-                <h2 className="text-2xl font-bold text-[#1C1009]">Bid Responses</h2>
+                <h2 className="text-xl sm:text-2xl font-bold text-[#1C1009]">Bid Responses</h2>
                 <p className="text-sm text-[#4B3A2A] mt-1">Viewing <strong>{bids.length}</strong> bids for {activeQuote.referenceId}</p>
               </div>
               <div className="flex bg-[#FFFBF5] border border-[#FFE5CC] rounded-lg p-1">
@@ -225,8 +225,8 @@ export default function Inbox({ showToast }) {
 
       {/* ── RIGHT PANEL: AI Insights ── */}
       {bids.length > 0 && viewMode === 'list' && (
-        <div className="w-80 shrink-0">
-          <div className="bg-gradient-to-b from-[#FFFBF5] to-white border border-[#FFE5CC] rounded-2xl p-5 shadow-sm sticky top-0">
+        <div className="w-full lg:w-80 shrink-0 mt-6 lg:mt-0">
+          <div className="bg-gradient-to-b from-[#FFFBF5] to-white border border-[#FFE5CC] rounded-2xl p-5 shadow-sm lg:sticky lg:top-0">
             <div className="flex items-center gap-2 mb-5">
               <div className="w-8 h-8 rounded-full bg-[#FFF8F0] border border-[#FFE5CC] flex items-center justify-center">
                 <BarChart2 className="w-4 h-4 text-[#F97316]" />

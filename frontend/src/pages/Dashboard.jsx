@@ -53,7 +53,7 @@ export default function Dashboard({ showToast, onNavigate }) {
       </div>
 
       {/* KPI Stats */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5">
         <Stat icon={<Send className="w-5 h-5"/>}     label="Bids Dispatched"    value={sent.length}       color="#F97316"/>
         <Stat icon={<InboxIcon className="w-5 h-5"/>} label="Bids Received"      value={getBids().length}  color="#F59E0B"/>
         <Stat icon={<Clock className="w-5 h-5"/>}     label="Pending Actions"    value={getBids().filter(b=>b.status==='pending').length} color="#10B981"/>
@@ -62,10 +62,10 @@ export default function Dashboard({ showToast, onNavigate }) {
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         {/* Recent shipments */}
-        <div className="lg:col-span-2 bg-white border border-[#FFE5CC] rounded-2xl p-8 shadow-sm">
+        <div className="lg:col-span-2 bg-white border border-[#FFE5CC] rounded-2xl p-6 lg:p-8 shadow-sm overflow-hidden">
           <div className="flex items-center justify-between mb-6 pb-4 border-b border-[#FFE5CC]">
             <h3 className="text-base font-bold text-[#1C1009]">Recent Campaigns</h3>
-            <button onClick={() => onNavigate('quotes')} className="text-xs text-[#F97316] font-bold hover:text-[#EA580C]">View All →</button>
+            <button onClick={() => onNavigate('quotes')} className="text-xs text-[#F97316] font-bold hover:text-[#EA580C] shrink-0">View All →</button>
           </div>
 
           {quotes.length === 0 ? (
@@ -78,17 +78,17 @@ export default function Dashboard({ showToast, onNavigate }) {
             <div className="space-y-3">
               {quotes.slice(0, 5).map(q => (
                 <div key={q.id} className="p-4 bg-[#FFFBF5] rounded-xl border border-[#FFE5CC] flex flex-col md:flex-row md:items-center justify-between gap-3">
-                  <div className="flex items-start gap-3">
+                  <div className="flex items-start gap-3 min-w-0">
                     <div className="w-9 h-9 shrink-0 bg-white border border-[#FFE5CC] rounded-full flex items-center justify-center text-[#F97316]">
                       <Truck className="w-4 h-4"/>
                     </div>
-                    <div>
-                      <div className="flex items-center gap-2">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-mono font-bold text-xs text-[#1C1009]">{q.referenceId}</span>
                         <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase ${q.status==='Sent'?'bg-orange-100 text-[#F97316]':'bg-emerald-50 text-emerald-800'}`}>{q.status}</span>
                       </div>
-                      <p className="text-xs text-[#4B3A2A] mt-0.5"><strong>{q.origin}</strong> → <strong>{q.destination}</strong></p>
-                      <span className="text-[10px] text-[#8C7560]">{q.mode} · {q.cargoType} · {q.weight} kg</span>
+                      <p className="text-xs text-[#4B3A2A] mt-0.5 truncate"><strong>{q.origin}</strong> → <strong>{q.destination}</strong></p>
+                      <span className="text-[10px] text-[#8C7560] block truncate">{q.mode} · {q.cargoType} · {q.weight} kg</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-2 self-end md:self-auto">
