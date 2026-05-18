@@ -1,36 +1,183 @@
-import React, { useState } from 'react';
-import { Send, FileText, MapPin, Scale, Layers, DollarSign, Truck, Building2, Calendar, Clock, Check, FileDown } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Send, FileText, MapPin, Scale, Layers, DollarSign, Truck, Building2, Calendar, Clock, Check, FileDown, RefreshCw, AlertCircle, CheckCircle2, Loader2 } from 'lucide-react';
 import { getForwarders, addQuote, updateQuoteStatus, genRefId, dispatchEmails, printQuotePDF } from '../storage.js';
 
 const BLANK = { origin:'', destination:'', cargoType:'General', weight:'', dimensions:'', declaredValue:'', incoterms:'EXW', mode:'Air', readyDate:'', specialInstructions:'', deadline:'' };
 
-function SuccessScreen({ quote, forwarders, onViewHistory, onPrint }) {
+function SuccessScreen({ quote, onViewHistory, onPrint, showToast }) {
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const prevStatusesRef = useRef({});
+
+  useEffect(() => {
+    let active = true;
+    
+    const fetchLogs = async () => {
+      try {
+        const res = await fetch(`/api/email-logs?rfq_id=${quote.referenceId}`);
+        if (!res.ok) throw new Error('API request failed');
+        const data = await res.json();
+        
+        if (!active) return;
+
+        // Process status changes to trigger toasts
+        data.forEach(log => {
+          const prevStatus = prevStatusesRef.current[log.id];
+          if (prevStatus && prevStatus !== log.status) {
+            if (log.status === 'sent') {
+              showToast(`RFQ successfully delivered to ${log.forwarder_name}!`, 'success');
+            } else if (log.status === 'failed') {
+              showToast(`RFQ delivery failed for ${log.forwarder_name}.`, 'error');
+            } else if (log.status === 'retrying') {
+              showToast(`Retrying RFQ delivery for ${log.forwarder_name} (Attempt ${log.retry_count}/3)...`, 'warning');
+            }
+          }
+          // Update ref with new status
+          prevStatusesRef.current[log.id] = log.status;
+        });
+
+        setLogs(data);
+        setLoading(false);
+      } catch (err) {
+        console.error('[TELEMETRY] Error fetching email logs:', err);
+      }
+    };
+
+    fetchLogs();
+    const interval = setInterval(fetchLogs, 1500);
+
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
+  }, [quote.referenceId, showToast]);
+
+  const total = logs.length;
+  const sent = logs.filter(l => l.status === 'sent').length;
+  const failed = logs.filter(l => l.status === 'failed').length;
+  const retrying = logs.filter(l => l.status === 'retrying').length;
+  const queued = logs.filter(l => l.status === 'queued' || l.status === 'sending').length;
+
+  const pct = total > 0 ? Math.round((sent / total) * 100) : 0;
+  const isFinished = total > 0 && (sent + failed === total);
+
   return (
-    <div className="bg-white border border-[#FFE5CC] rounded-2xl p-12 shadow-sm text-center space-y-8 max-w-2xl mx-auto">
-      {/* Animated checkmark */}
-      <div className="success-checkmark"><div className="check-icon">
-        <span className="icon-line line-tip"></span>
-        <span className="icon-line line-long"></span>
-        <div className="icon-circle"></div>
-        <div className="icon-fix"></div>
-      </div></div>
+    <div className="bg-white border border-[#FFE5CC] rounded-2xl p-6 sm:p-10 shadow-sm text-center space-y-8 max-w-2xl mx-auto">
+      {/* Dynamic Header Badge */}
+      <div className="flex flex-col items-center space-y-4">
+        {isFinished ? (
+          <div className="w-16 h-16 rounded-full bg-green-50 border border-green-200 flex items-center justify-center text-green-600 shadow-sm animate-bounce">
+            <CheckCircle2 className="w-10 h-10" />
+          </div>
+        ) : (
+          <div className="w-16 h-16 rounded-full bg-[#FFF8F0] border border-[#FFE5CC] flex items-center justify-center text-[#F97316] shadow-sm animate-spin">
+            <Loader2 className="w-10 h-10 animate-spin" />
+          </div>
+        )}
 
+        <div className="space-y-1">
+          <h3 className="text-2xl font-bold text-[#1C1009]">
+            {isFinished ? 'Campaign Completed!' : 'Dispatching RFQ Campaign...'}
+          </h3>
+          <p className="text-xs text-[#8C7560] max-w-md mx-auto">
+            Shipment Ref: <span className="font-mono font-bold text-[#F97316]">{quote.referenceId}</span> is being delivered via Gmail SMTP.
+          </p>
+        </div>
+      </div>
+
+      {/* Campaign Dynamic Stats */}
+      <div className="grid grid-cols-4 gap-2.5 sm:gap-4 text-center">
+        <div className="bg-[#FFFBF5] border border-[#FFE5CC] rounded-xl p-3">
+          <span className="text-[9px] sm:text-[10px] text-[#8C7560] font-bold uppercase tracking-wider block">Recipients</span>
+          <span className="text-lg sm:text-xl font-bold text-[#1C1009]">{total || '-'}</span>
+        </div>
+        <div className="bg-[#FFFBF5] border border-[#FFE5CC] rounded-xl p-3">
+          <span className="text-[9px] sm:text-[10px] text-[#8C7560] font-bold uppercase tracking-wider block">Delivered</span>
+          <span className="text-lg sm:text-xl font-bold text-green-600">{sent}</span>
+        </div>
+        <div className="bg-[#FFFBF5] border border-[#FFE5CC] rounded-xl p-3">
+          <span className="text-[9px] sm:text-[10px] text-[#8C7560] font-bold uppercase tracking-wider block">Retrying</span>
+          <span className="text-lg sm:text-xl font-bold text-yellow-600">{retrying}</span>
+        </div>
+        <div className="bg-[#FFFBF5] border border-[#FFE5CC] rounded-xl p-3">
+          <span className="text-[9px] sm:text-[10px] text-[#8C7560] font-bold uppercase tracking-wider block">Failed</span>
+          <span className="text-lg sm:text-xl font-bold text-red-600">{failed}</span>
+        </div>
+      </div>
+
+      {/* Progress Bar Container */}
       <div className="space-y-2">
-        <h3 className="text-2xl font-bold text-[#1C1009]">Campaign Dispatched!</h3>
-        <p className="text-sm text-[#4B3A2A] max-w-md mx-auto">
-          Quotation <span className="font-mono font-bold text-[#F97316]">{quote.referenceId}</span> saved and bid emails sent to <strong>{quote.emailedCount || forwarders.length}</strong> forwarders.
-        </p>
+        <div className="flex justify-between text-xs font-bold text-[#8C7560]">
+          <span>Delivery Progress</span>
+          <span>{pct}%</span>
+        </div>
+        <div className="w-full bg-[#FFF1E0] rounded-full h-3 overflow-hidden border border-[#FFE5CC]">
+          <div 
+            className="bg-gradient-to-r from-[#F97316] to-[#EA580C] h-full transition-all duration-500 ease-out" 
+            style={{ width: `${pct}%` }}
+          ></div>
+        </div>
       </div>
 
-      <div className="bg-[#FFFBF5] border border-[#FFE5CC] rounded-xl p-5 text-left grid grid-cols-2 gap-3 text-xs max-w-md mx-auto">
-        <div><span className="text-[#8C7560] block">Reference ID</span><span className="font-mono font-bold text-[#1C1009]">{quote.referenceId}</span></div>
-        <div><span className="text-[#8C7560] block">Forwarders Emailed</span><span className="font-bold text-[#1C1009]">{quote.emailedCount || forwarders.length}</span></div>
-        <div><span className="text-[#8C7560] block">Route</span><span className="font-bold text-[#1C1009]">{quote.origin} → {quote.destination}</span></div>
-        <div><span className="text-[#8C7560] block">Mode</span><span className="font-bold text-[#1C1009]">{quote.mode} · {quote.cargoType}</span></div>
+      {/* Real-time Recipient Status Logs */}
+      <div className="space-y-3">
+        <div className="text-left text-xs font-bold uppercase tracking-wider text-[#1C1009] border-b border-[#FFE5CC] pb-2">
+          Outbound Transmission Log
+        </div>
+        
+        {loading ? (
+          <div className="py-8 text-sm text-[#8C7560] flex items-center justify-center gap-2">
+            <Loader2 className="w-4 h-4 animate-spin text-[#F97316]" /> Syncing with backend mail queue...
+          </div>
+        ) : (
+          <div className="space-y-2 max-h-56 overflow-y-auto pr-1 text-left custom-scrollbar">
+            {logs.map((log) => {
+              let badgeClass = "";
+              let badgeText = "";
+              let StatusIcon = null;
+
+              if (log.status === 'sent') {
+                badgeClass = "bg-green-50 text-green-700 border-green-200";
+                badgeText = "Delivered";
+                StatusIcon = <CheckCircle2 className="w-3.5 h-3.5 text-green-600" />;
+              } else if (log.status === 'failed') {
+                badgeClass = "bg-red-50 text-red-700 border-red-200";
+                badgeText = "Failed";
+                StatusIcon = <AlertCircle className="w-3.5 h-3.5 text-red-600" />;
+              } else if (log.status === 'retrying') {
+                badgeClass = "bg-yellow-50 text-yellow-700 border-yellow-200 animate-pulse";
+                badgeText = `Retry #${log.retry_count}`;
+                StatusIcon = <RefreshCw className="w-3.5 h-3.5 text-yellow-600 animate-spin" />;
+              } else if (log.status === 'sending') {
+                badgeClass = "bg-orange-50 text-[#F97316] border-[#FFE5CC]";
+                badgeText = "Sending...";
+                StatusIcon = <Loader2 className="w-3.5 h-3.5 text-[#F97316] animate-spin" />;
+              } else {
+                badgeClass = "bg-gray-50 text-gray-500 border-gray-200";
+                badgeText = "Queued";
+                StatusIcon = <Clock className="w-3.5 h-3.5 text-gray-400" />;
+              }
+
+              return (
+                <div key={log.id} className="flex items-center justify-between p-3 bg-[#FFFBF5] border border-[#FFE5CC] rounded-xl hover:border-[#F97316]/30 transition-all gap-2">
+                  <div className="min-w-0 flex-1">
+                    <span className="font-bold text-[#1C1009] text-xs sm:text-sm block truncate">{log.forwarder_name}</span>
+                    <span className="text-[10px] sm:text-xs text-[#8C7560] font-mono block truncate">{log.recipient_email}</span>
+                  </div>
+                  <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] sm:text-xs font-bold border shrink-0 ${badgeClass}`}>
+                    {StatusIcon}
+                    <span>{badgeText}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
-      <div className="flex justify-center gap-3">
-        <button onClick={onPrint} className="flex items-center gap-2 bg-[#FFF8F0] border border-[#FFE5CC] text-[#4B3A2A] px-5 py-3 rounded-xl font-bold text-sm hover:bg-[#FFF1E0] transition-all">
+      {/* Actions */}
+      <div className="flex flex-col sm:flex-row justify-center gap-3 pt-4 border-t border-[#FFE5CC]">
+        <button onClick={onPrint} className="flex items-center justify-center gap-2 bg-[#FFF8F0] border border-[#FFE5CC] text-[#4B3A2A] px-5 py-3 rounded-xl font-bold text-sm hover:bg-[#FFF1E0] transition-all">
           <FileDown className="w-4 h-4" /> Export PDF
         </button>
         <button onClick={onViewHistory} className="bg-[#F97316] hover:bg-[#EA580C] text-white px-8 py-3 rounded-xl font-bold text-sm transition-all shadow-sm">

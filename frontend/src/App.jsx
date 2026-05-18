@@ -6,6 +6,7 @@ import Forwarders from './pages/Forwarders.jsx';
 import NewQuote   from './pages/NewQuote.jsx';
 import Quotes     from './pages/Quotes.jsx';
 import Inbox      from './pages/Inbox.jsx';
+import Profile    from './pages/Profile.jsx';
 
 // Seed localStorage once on first load
 initStorage();
@@ -15,6 +16,22 @@ export default function App() {
   const [openModal, setOpenModal] = useState(false);   // for "Add Forwarder" shortcut
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [toast, setToast]       = useState(null);
+  const [profileName, setProfileName] = useState('Logistics Manager');
+
+  useEffect(() => {
+    const updateProfileName = () => {
+      const saved = localStorage.getItem('fb_company_profile');
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (parsed.companyName) setProfileName(parsed.companyName);
+        } catch {}
+      }
+    };
+    updateProfileName();
+    window.addEventListener('storage_profile_updated', updateProfileName);
+    return () => window.removeEventListener('storage_profile_updated', updateProfileName);
+  }, []);
 
   const showToast = (msg, type = 'success') => {
     setToast({ msg, type });
@@ -47,6 +64,7 @@ export default function App() {
     { id: 'forwarders', label: 'Forwarder CRM',       Icon: Building2, badge: counts.fwds   },
     { id: 'new-quote',  label: 'Dispatch Shipment',   Icon: Plus       },
     { id: 'quotes',     label: 'Quotation History',   Icon: FileText,  badge: counts.quotes },
+    { id: 'profile',    label: 'Company Profile',     Icon: User       },
   ];
 
   return (
@@ -122,10 +140,10 @@ export default function App() {
               <div><span className="text-[#8C7560] text-xs block">Dispatched</span><span className="font-bold text-[#1C1009]">{getQuotes().filter(q=>q.status==='Sent').length} Bids</span></div>
               <div><span className="text-[#8C7560] text-xs block">Network</span><span className="font-bold text-[#1C1009]">{getForwarders().length} Agencies</span></div>
             </div>
-            <div className="w-8 h-8 lg:w-9 lg:h-9 shrink-0 rounded-full bg-[#FFF1E0] border border-[#F97316]/20 flex items-center justify-center text-[#F97316]">
+            <button onClick={() => navigate('profile')} className="w-8 h-8 lg:w-9 lg:h-9 shrink-0 rounded-full bg-[#FFF1E0] border border-[#F97316]/20 flex items-center justify-center text-[#F97316] hover:bg-[#FFF1E0]/80 transition-all outline-none">
               <User className="w-4 h-4 lg:w-5 lg:h-5"/>
-            </div>
-            <span className="hidden sm:inline font-semibold text-sm text-[#1C1009]">Logistics Manager</span>
+            </button>
+            <span className="hidden sm:inline font-semibold text-sm text-[#1C1009] cursor-pointer hover:text-[#F97316] transition-all" onClick={() => navigate('profile')}>{profileName}</span>
           </div>
         </header>
 
@@ -148,6 +166,7 @@ export default function App() {
           {tab === 'forwarders' && <Forwarders showToast={showToast} openModal={openModal} onModalClosed={() => setOpenModal(false)}/>}
           {tab === 'new-quote'  && <NewQuote   showToast={showToast} onViewHistory={() => setTab('quotes')}/>}
           {tab === 'quotes'     && <Quotes     showToast={showToast} onNewQuote={() => setTab('new-quote')}/>}
+          {tab === 'profile'    && <Profile    showToast={showToast} />}
         </main>
       </div>
     </div>

@@ -70,5 +70,41 @@
     "status": "Sent",
     "createdAt": "2026-05-18T01:38:08.668Z",
     "forwardersEmailedCount": 4
+  },
+  {
+    "id": "quote-1779111512793",
+    "referenceId": "FB-20260518-1933",
+    "origin": "Shanghai, China",
+    "destination": "Rotterdam, Netherlands",
+    "cargoType": "General",
+    "weight": 2500,
+    "dimensions": "200x100x180 cm",
+    "declaredValue": 75000,
+    "incoterms": "CIF",
+    "mode": "Sea",
+    "readyDate": "2026-07-01",
+    "specialInstructions": "API test shipment. Palletized cargo.",
+    "deadline": "2026-06-15",
+    "status": "Sent",
+    "createdAt": "2026-05-18T13:38:32.793Z",
+    "forwardersEmailedCount": 4
+  },
+  {
+    "id": "q-1779111757872",
+    "referenceId": "FB-20260518-7081",
+    "origin": "Mumbai, India",
+    "destination": "Hamburg, Germany",
+    "cargoType": "General",
+    "weight": 2000,
+    "dimensions": "120 x 80 x 140",
+    "declaredValue": 60348,
+    "incoterms": "FCA",
+    "mode": "Air",
+    "readyDate": "2026-05-20",
+    "specialInstructions": "temperature should be freezing",
+    "deadline": "2026-06-06",
+    "status": "Sent",
+    "createdAt": "2026-05-18T13:42:37.872Z",
+    "forwardersEmailedCount": 4
   }
 ]

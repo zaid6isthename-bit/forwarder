@@ -5,6 +5,9 @@ import fs from 'fs/promises';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import nodemailer from 'nodemailer';
+import { mailService } from './src/server/email/mailService.js';
+import { emailQueue } from './src/server/email/emailQueue.js';
+import { getLogsByRfq } from './src/server/email/emailLogger.js';
 
 // Load environment variables
 dotenv.config();
@@ -70,6 +73,7 @@ async function writeData(filePath, data) {
 
 // Initialize storage folders & files
 await initStorage();
+await emailQueue.resumePendingJobs();
 
 // ==================== FORWARDERS API ====================
 
@@ -220,8 +224,104 @@ app.post('/api/quotes', async (req, res) => {
   }
 });
 
-// ==================== EMAIL TRIGGER API ====================
+// ==================== EMAIL TRIGGER & LOGS API ====================
 
+// Helper to process campaign
+async function initiateCampaign(quote, frontendForwarders, res) {
+  if (!quote) {
+    return res.status(400).json({ error: 'Quote data is required.' });
+  }
+
+  // 1. Save or sync RFQ to backend database
+  const quotes = await readData(QUOTES_FILE);
+  const existingQuoteIndex = quotes.findIndex(q => q.referenceId === quote.referenceId || q.id === quote.id);
+  
+  const quoteToSave = {
+    id: quote.id || `quote-${Date.now()}`,
+    referenceId: quote.referenceId,
+    origin: quote.origin,
+    destination: quote.destination,
+    cargoType: quote.cargoType,
+    weight: Number(quote.weight) || 0,
+    dimensions: quote.dimensions || 'N/A',
+    declaredValue: Number(quote.declaredValue) || 0,
+    incoterms: quote.incoterms || 'EXW',
+    mode: quote.mode || 'Air',
+    readyDate: quote.readyDate || '',
+    specialInstructions: quote.specialInstructions || '',
+    deadline: quote.deadline || '',
+    status: 'Sent',
+    createdAt: quote.createdAt || new Date().toISOString(),
+    forwardersEmailedCount: 0
+  };
+
+  if (existingQuoteIndex === -1) {
+    quotes.push(quoteToSave);
+  } else {
+    quotes[existingQuoteIndex] = {
+      ...quotes[existingQuoteIndex],
+      ...quoteToSave
+    };
+  }
+  await writeData(QUOTES_FILE, quotes);
+
+  // 2. Fetch all forwarders from backend database (CRM)
+  let forwarders = await readData(FORWARDERS_FILE);
+  if (forwarders.length === 0) {
+    console.log('[API] Backend forwarders CRM is empty. Using forwarders list passed from frontend.');
+    forwarders = frontendForwarders || [];
+  }
+
+  if (forwarders.length === 0) {
+    return res.status(400).json({ error: 'No forwarders available in CRM. Please add forwarders first.' });
+  }
+
+  // 3. Queue emails asynchronously using the reusable mailService
+  const smtpUser = process.env.SMTP_USER || '';
+  const smtpPass = process.env.SMTP_PASS || '';
+  const isMock = !smtpUser || smtpUser.includes('your_email') || !smtpPass || smtpPass.includes('your_app_password');
+
+  const recipients = forwarders.map(f => ({
+    name: f.name,
+    email: f.email,
+    company: f.company
+  }));
+
+  try {
+    const result = await mailService.sendRFQEmails(quoteToSave, recipients);
+
+    // Update emailed count in database
+    quoteToSave.forwardersEmailedCount = recipients.length;
+    if (existingQuoteIndex === -1) {
+      quotes[quotes.length - 1] = quoteToSave;
+    } else {
+      quotes[existingQuoteIndex] = quoteToSave;
+    }
+    await writeData(QUOTES_FILE, quotes);
+
+    return res.json({
+      message: isMock 
+        ? `Simulated email send-out complete. Saved draft copies to backend console.`
+        : `Successfully queued quotation requests to ${recipients.length} forwarders!`,
+      isMock,
+      sentCount: recipients.length,
+      totalCount: forwarders.length,
+      jobs: result.jobs
+    });
+
+  } catch (error) {
+    console.error('[API] Error initiating email campaign:', error);
+    return res.status(500).json({ error: 'Failed to initiate email campaign.', details: error.message });
+  }
+}
+
+// POST endpoint matching frontend request
+app.post('/api/send-email', async (req, res) => {
+  const { quote, forwarders } = req.body;
+  await initiateCampaign(quote, forwarders, res);
+});
+
+// POST endpoint for trigger by quote ID
 app.post('/api/send-quote', async (req, res) => {
   const { quoteId } = req.body;
 
@@ -230,338 +330,30 @@ app.post('/api/send-quote', async (req, res) => {
   }
 
   const quotes = await readData(QUOTES_FILE);
-  const quoteIndex = quotes.findIndex(q => q.id === quoteId);
+  const quote = quotes.find(q => q.id === quoteId || q.referenceId === quoteId);
 
-  if (quoteIndex === -1) {
+  if (!quote) {
     return res.status(404).json({ error: 'Quotation request not found.' });
   }
 
-  const quote = quotes[quoteIndex];
   const forwarders = await readData(FORWARDERS_FILE);
+  await initiateCampaign(quote, forwarders, res);
+});
 
-  if (forwarders.length === 0) {
-    return res.status(400).json({ error: 'No forwarders listed in the database. Please add forwarders first.' });
+// GET endpoint to query email send status in real-time
+app.get('/api/email-logs', async (req, res) => {
+  const { rfq_id } = req.query;
+
+  if (!rfq_id) {
+    return res.status(400).json({ error: 'rfq_id parameter is required.' });
   }
 
-  // Check if SMTP is mock or custom
-  const smtpUser = process.env.SMTP_USER || '';
-  const smtpPass = process.env.SMTP_PASS || '';
-  const senderEmail = process.env.SENDER_EMAIL || smtpUser;
-  const senderName = process.env.SENDER_NAME || 'FreightBid Logistics';
-
-  const isMockSmtp = 
-    !smtpUser || 
-    smtpUser.includes('your_email') || 
-    smtpUser === '' || 
-    !smtpPass || 
-    smtpPass.includes('your_app_password');
-
-  const emailsToSend = forwarders.map(f => ({
-    name: f.name,
-    company: f.company,
-    email: f.email
-  }));
-
-  const results = [];
-  let sentCount = 0;
-
-  // Render the beautiful HTML Template
-  const generateEmailHtml = (forwarderName, forwarderCompany) => {
-    return `
-    <!DOCTYPE html>
-    <html>
-    <head>
-      <meta charset="utf-8">
-      <title>Freight Quotation Request</title>
-      <style>
-        body {
-          font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-          background-color: #FFF8F0;
-          color: #4B3A2A;
-          margin: 0;
-          padding: 20px;
-        }
-        .container {
-          max-width: 600px;
-          margin: 0 auto;
-          background-color: #FFFFFF;
-          border-radius: 12px;
-          overflow: hidden;
-          box-shadow: 0 4px 12px rgba(249, 115, 22, 0.08);
-          border: 1px solid #FFE5CC;
-        }
-        .header {
-          background-color: #F97316;
-          padding: 24px 30px;
-          text-align: center;
-        }
-        .header h1 {
-          color: #FFFFFF;
-          margin: 0;
-          font-size: 24px;
-          font-weight: 700;
-          letter-spacing: 0.5px;
-        }
-        .content {
-          padding: 30px;
-        }
-        .greeting {
-          font-size: 16px;
-          font-weight: 600;
-          color: #1C1009;
-          margin-bottom: 12px;
-        }
-        .intro {
-          font-size: 14px;
-          line-height: 1.6;
-          margin-bottom: 24px;
-          color: #4B3A2A;
-        }
-        .section-title {
-          font-size: 14px;
-          font-weight: 700;
-          color: #F97316;
-          text-transform: uppercase;
-          margin-bottom: 12px;
-          letter-spacing: 1px;
-          border-bottom: 1px solid #FFE5CC;
-          padding-bottom: 4px;
-        }
-        .detail-table {
-          width: 100%;
-          border-collapse: collapse;
-          margin-bottom: 24px;
-        }
-        .detail-table td {
-          padding: 8px 12px;
-          font-size: 14px;
-          border-bottom: 1px solid #FFF8F0;
-        }
-        .detail-table td.label {
-          font-weight: 600;
-          color: #1C1009;
-          width: 40%;
-          background-color: #FFFBF5;
-        }
-        .detail-table td.value {
-          color: #4B3A2A;
-        }
-        .cta-box {
-          background-color: #FFFBF5;
-          border: 1px dashed #F97316;
-          border-radius: 8px;
-          padding: 20px;
-          margin-bottom: 24px;
-          text-align: left;
-        }
-        .cta-box h3 {
-          margin-top: 0;
-          color: #F97316;
-          font-size: 15px;
-          font-weight: 700;
-        }
-        .cta-box ol {
-          margin: 0;
-          padding-left: 20px;
-          font-size: 14px;
-          color: #4B3A2A;
-          line-height: 1.6;
-        }
-        .cta-box li {
-          margin-bottom: 6px;
-        }
-        .deadline {
-          font-size: 14px;
-          font-weight: 700;
-          color: #1C1009;
-          margin-top: 15px;
-          background-color: #FFE5CC;
-          padding: 8px 12px;
-          border-radius: 6px;
-          display: inline-block;
-        }
-        .footer {
-          background-color: #FFFBF5;
-          border-top: 1px solid #FFE5CC;
-          padding: 20px 30px;
-          text-align: center;
-          font-size: 12px;
-          color: #8C7560;
-        }
-      </style>
-    </head>
-    <body>
-      <div class="container">
-        <div class="header">
-          <h1>FREIGHTBID LOGISTICS</h1>
-        </div>
-        <div class="content">
-          <div class="greeting">Dear ${forwarderName} (${forwarderCompany}),</div>
-          <div class="intro">
-            We have registered a new shipment quotation request in our logistics network. We highly value your service quality and would like to cordially invite you to submit your most competitive freight bid.
-          </div>
-          
-          <div class="section-title">Shipment Information</div>
-          <table class="detail-table">
-            <tr>
-              <td class="label">Reference ID</td>
-              <td class="value"><strong>${quote.referenceId}</strong></td>
-            </tr>
-            <tr>
-              <td class="label">Origin</td>
-              <td class="value">${quote.origin}</td>
-            </tr>
-            <tr>
-              <td class="label">Destination</td>
-              <td class="value">${quote.destination}</td>
-            </tr>
-            <tr>
-              <td class="label">Cargo Type</td>
-              <td class="value">${quote.cargoType}</td>
-            </tr>
-            <tr>
-              <td class="label">Weight</td>
-              <td class="value">${quote.weight} kg</td>
-            </tr>
-            <tr>
-              <td class="label">Dimensions (L x W x H)</td>
-              <td class="value">${quote.dimensions}</td>
-            </tr>
-            <tr>
-              <td class="label">Declared Value</td>
-              <td class="value">${quote.declaredValue ? `$${quote.declaredValue.toLocaleString()}` : 'N/A'}</td>
-            </tr>
-            <tr>
-              <td class="label">Incoterms</td>
-              <td class="value">${quote.incoterms}</td>
-            </tr>
-            <tr>
-              <td class="label">Mode of Shipment</td>
-              <td class="value">${quote.mode}</td>
-            </tr>
-            <tr>
-              <td class="label">Expected Readiness</td>
-              <td class="value">${quote.readyDate}</td>
-            </tr>
-            ${quote.specialInstructions ? `
-            <tr>
-              <td class="label">Special Instructions</td>
-              <td class="value">${quote.specialInstructions}</td>
-            </tr>` : ''}
-          </table>
-
-          <div class="cta-box">
-            <h3>Bidding Submission Instructions</h3>
-            <p style="font-size: 13px; margin-top: 0; color: #4B3A2A;">Please reply directly to this email with the following details to place your bid:</p>
-            <ol>
-              <li><strong>Your Quoted Price:</strong> Total all-inclusive rate (state currency: USD/INR)</li>
-              <li><strong>Estimated Transit Time (ETD / ETA):</strong> Total transit duration</li>
-              <li><strong>Terms & Conditions:</strong> Any additional surcharges, exclusions, or carrier remarks</li>
-            </ol>
-            <div class="deadline">
-              Submission Deadline: ${quote.deadline ? new Date(quote.deadline).toLocaleDateString(undefined, { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) : 'ASAP'}
-            </div>
-          </div>
-        </div>
-        <div class="footer">
-          This is an automated quotation inquiry generated via <strong>FreightBid Logistics Platform</strong>.<br/>
-          &copy; ${new Date().getFullYear()} ${senderName}. All rights reserved.<br/>
-          Contact: ${senderEmail}
-        </div>
-      </div>
-    </body>
-    </html>
-    `;
-  };
-
-  if (isMockSmtp) {
-    console.log('\n======================================================');
-    console.log(`[SMTP MOCK MODE] Sending quote request ${quote.referenceId} to ${forwarders.length} forwarders.`);
-    console.log('======================================================');
-    
-    for (const f of forwarders) {
-      console.log(`\n--> Email Draft for: ${f.name} <${f.email}>`);
-      console.log(`Subject: Freight Quotation Request - ${quote.referenceId} | ${quote.origin} to ${quote.destination}`);
-      console.log('Email Body Generated Successfully.');
-      
-      results.push({
-        email: f.email,
-        name: f.name,
-        company: f.company,
-        status: 'simulated_success'
-      });
-      sentCount++;
-    }
-    
-    console.log('\n======================================================\n');
-  } else {
-    // Real SMTP setup
-    try {
-      const transporter = nodemailer.createTransport({
-        host: process.env.SMTP_HOST,
-        port: parseInt(process.env.SMTP_PORT || '587'),
-        secure: process.env.SMTP_PORT === '465', // true for 465, false for other ports
-        auth: {
-          user: smtpUser,
-          pass: smtpPass,
-        },
-      });
-
-      // Verify connection config
-      await transporter.verify();
-
-      for (const f of forwarders) {
-        const mailOptions = {
-          from: `"${senderName}" <${senderEmail}>`,
-          to: f.email,
-          subject: `Freight Quotation Request – ${quote.referenceId} | ${quote.origin} to ${quote.destination}`,
-          html: generateEmailHtml(f.name, f.company)
-        };
-
-        try {
-          const info = await transporter.sendMail(mailOptions);
-          results.push({
-            email: f.email,
-            name: f.name,
-            company: f.company,
-            status: 'success',
-            messageId: info.messageId
-          });
-          sentCount++;
-        } catch (mailError) {
-          console.error(`Failed to send email to ${f.email}:`, mailError);
-          results.push({
-            email: f.email,
-            name: f.name,
-            company: f.company,
-            status: 'failed',
-            error: mailError.message
-          });
-        }
-      }
-    } catch (smtpError) {
-      console.error('SMTP Connection setup failed, falling back to simulated send:', smtpError);
-      return res.status(500).json({ 
-        error: 'Failed to configure SMTP connection.', 
-        details: smtpError.message 
-      });
-    }
+  try {
+    const logs = await getLogsByRfq(rfq_id);
+    return res.json(logs);
+  } catch (error) {
+    return res.status(500).json({ error: 'Failed to retrieve email logs.', details: error.message });
   }
-
-  // Update quote status in DB
-  quote.status = 'Sent';
-  quote.forwardersEmailedCount = sentCount;
-  await writeData(QUOTES_FILE, quotes);
-
-  res.json({
-    message: isMockSmtp 
-      ? `Simulated email send-out complete. Saved draft copies to backend console.`
-      : `Successfully sent quotation requests to ${sentCount} forwarders!`,
-    isMock: isMockSmtp,
-    sentCount,
-    totalCount: forwarders.length,
-    results
-  });
 });
 
 // Start server
