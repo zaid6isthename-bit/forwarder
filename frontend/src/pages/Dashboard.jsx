@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Activity, Building2, FileText, Plus, Send, Truck, Mail, Clock } from 'lucide-react';
-import { getForwarders, getQuotes, updateQuoteStatus, dispatchEmails } from '../storage.js';
+import { Activity, Building2, FileText, Plus, Send, Truck, Mail, Clock, Inbox as InboxIcon } from 'lucide-react';
+import { getForwarders, getQuotes, updateQuoteStatus, dispatchEmails, getBids } from '../storage.js';
 
 export default function Dashboard({ showToast, onNavigate }) {
   const [fwds, setFwds]     = useState(getForwarders);
@@ -42,17 +42,22 @@ export default function Dashboard({ showToast, onNavigate }) {
 
   return (
     <div className="space-y-10">
-      <div>
-        <h2 className="text-3xl font-bold text-[#1C1009]">Shipment Control Room</h2>
-        <p className="text-sm text-[#4B3A2A] mt-1">Monitor campaigns, dispatch bids, and manage your logistics network.</p>
+      <div className="flex justify-between items-end">
+        <div>
+          <h2 className="text-3xl font-bold text-[#1C1009]">Shipment Control Room</h2>
+          <p className="text-sm text-[#4B3A2A] mt-1">Monitor campaigns, review bids, and manage your logistics network.</p>
+        </div>
+        <button onClick={() => onNavigate('inbox')} className="bg-white border border-[#F97316] text-[#F97316] hover:bg-[#F97316] hover:text-white px-5 py-2.5 rounded-xl text-sm font-bold transition-all shadow-sm flex items-center gap-2">
+          <InboxIcon className="w-4 h-4"/> Go to Bid Inbox
+        </button>
       </div>
 
       {/* KPI Stats */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-5">
         <Stat icon={<Send className="w-5 h-5"/>}     label="Bids Dispatched"    value={sent.length}       color="#F97316"/>
-        <Stat icon={<Building2 className="w-5 h-5"/>} label="Forwarder Network"  value={fwds.length}       color="#F59E0B"/>
-        <Stat icon={<Clock className="w-5 h-5"/>}     label="Pending Actions"    value={pending.length}    color="#10B981"/>
-        <Stat icon={<Mail className="w-5 h-5"/>}      label="Emails Sent"        value={totalEmailed}      color="#EF4444"/>
+        <Stat icon={<InboxIcon className="w-5 h-5"/>} label="Bids Received"      value={getBids().length}  color="#F59E0B"/>
+        <Stat icon={<Clock className="w-5 h-5"/>}     label="Pending Actions"    value={getBids().filter(b=>b.status==='pending').length} color="#10B981"/>
+        <Stat icon={<Building2 className="w-5 h-5"/>} label="Forwarder Network"  value={fwds.length}       color="#3B82F6"/>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">

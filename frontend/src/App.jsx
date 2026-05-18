@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
-import { Building2, Activity, FileText, Plus, AlertCircle, HardDrive, User } from 'lucide-react';
-import { initStorage, getForwarders, getQuotes } from './storage.js';
+import { Building2, Activity, FileText, Plus, AlertCircle, HardDrive, User, Inbox as InboxIcon } from 'lucide-react';
+import { initStorage, getForwarders, getQuotes, getBids } from './storage.js';
 import Dashboard  from './pages/Dashboard.jsx';
 import Forwarders from './pages/Forwarders.jsx';
 import NewQuote   from './pages/NewQuote.jsx';
 import Quotes     from './pages/Quotes.jsx';
+import Inbox      from './pages/Inbox.jsx';
 
 // Seed localStorage once on first load
 initStorage();
@@ -26,19 +27,24 @@ export default function App() {
   };
 
   // Counts for sidebar badges
-  const [counts, setCounts] = useState({ fwds: 0, quotes: 0 });
+  const [counts, setCounts] = useState({ fwds: 0, quotes: 0, bids: 0 });
   useEffect(() => {
-    const refresh = () => setCounts({ fwds: getForwarders().length, quotes: getQuotes().length });
+    const refresh = () => setCounts({ 
+      fwds: getForwarders().length, 
+      quotes: getQuotes().length,
+      bids: getBids().filter(b => b.status === 'pending').length
+    });
     refresh();
     window.addEventListener('focus', refresh);
     return () => window.removeEventListener('focus', refresh);
   }, [tab]);
 
   const NAV = [
-    { id: 'dashboard', label: 'Control Center',      Icon: Activity  },
-    { id: 'forwarders', label: 'Forwarder CRM',      Icon: Building2, badge: counts.fwds   },
-    { id: 'new-quote',  label: 'Dispatch Shipment',  Icon: Plus       },
-    { id: 'quotes',     label: 'Quotation History',  Icon: FileText,  badge: counts.quotes },
+    { id: 'dashboard',  label: 'Control Center',      Icon: Activity  },
+    { id: 'inbox',      label: 'AI Bid Inbox',        Icon: InboxIcon, badge: counts.bids > 0 ? counts.bids : null },
+    { id: 'forwarders', label: 'Forwarder CRM',       Icon: Building2, badge: counts.fwds   },
+    { id: 'new-quote',  label: 'Dispatch Shipment',   Icon: Plus       },
+    { id: 'quotes',     label: 'Quotation History',   Icon: FileText,  badge: counts.quotes },
   ];
 
   return (
@@ -118,6 +124,7 @@ export default function App() {
         {/* Page content */}
         <main className="flex-1 p-10 bg-[#FFF8F0]/40">
           {tab === 'dashboard'  && <Dashboard  showToast={showToast} onNavigate={navigate}/>}
+          {tab === 'inbox'      && <Inbox      showToast={showToast} />}
           {tab === 'forwarders' && <Forwarders showToast={showToast} openModal={openModal} onModalClosed={() => setOpenModal(false)}/>}
           {tab === 'new-quote'  && <NewQuote   showToast={showToast} onViewHistory={() => setTab('quotes')}/>}
           {tab === 'quotes'     && <Quotes     showToast={showToast} onNewQuote={() => setTab('new-quote')}/>}

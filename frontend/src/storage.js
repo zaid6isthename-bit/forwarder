@@ -1,13 +1,13 @@
-// ── localStorage keys ─────────────────────────────────────────
 const LS_FWD    = 'fb_forwarders';
 const LS_QUOTES = 'fb_quotes';
+const LS_BIDS   = 'fb_bids';
 
 // ── Seed data (loaded once on first launch) ───────────────────
 const SEED_FORWARDERS = [
-  { id: 'fwd-1', name: 'Alex Mercer',    company: 'Global Cargo Solutions',  email: 'alex.mercer@globalcargo.example.com',      phone: '+1-555-0198',       notes: 'Excellent air freight rates. Quick responses.' },
-  { id: 'fwd-2', name: 'Sarah Connor',   company: 'Apex Shippers',           email: 'sconnor@apexshippers.example.com',          phone: '+44-20-7946-0958',  notes: 'Specializes in European sea cargo and DDP.' },
-  { id: 'fwd-3', name: 'Vikram Singh',   company: 'Indo-Pacific Logistics',  email: 'ops@indopacificlogistics.example.com',      phone: '+91-22-5550-1234',  notes: 'Reliable road transport across India.' },
-  { id: 'fwd-4', name: 'Elena Rostova',  company: 'Eurasia Freight Alliance', email: 'elena.r@eurasiafreight.example.com',        phone: '+49-89-2019-3829',  notes: 'Perishable and fragile shipment specialist.' },
+  { id: 'fwd-1', name: 'Alex Mercer',    company: 'Global Cargo Solutions',  email: 'alex.mercer@globalcargo.example.com',      phone: '+1-555-0198',       notes: 'Excellent air freight rates. Quick responses.', reliability: 92 },
+  { id: 'fwd-2', name: 'Sarah Connor',   company: 'Apex Shippers',           email: 'sconnor@apexshippers.example.com',          phone: '+44-20-7946-0958',  notes: 'Specializes in European sea cargo and DDP.', reliability: 88 },
+  { id: 'fwd-3', name: 'Vikram Singh',   company: 'Indo-Pacific Logistics',  email: 'ops@indopacificlogistics.example.com',      phone: '+91-22-5550-1234',  notes: 'Reliable road transport across India.', reliability: 95 },
+  { id: 'fwd-4', name: 'Elena Rostova',  company: 'Eurasia Freight Alliance', email: 'elena.r@eurasiafreight.example.com',        phone: '+49-89-2019-3829',  notes: 'Perishable and fragile shipment specialist.', reliability: 85 },
 ];
 
 const SEED_QUOTES = [
@@ -16,10 +16,66 @@ const SEED_QUOTES = [
   { id: 'q-3', referenceId: 'FB-20260517-1052', origin: 'London, UK',     destination: 'Dubai, UAE',       cargoType: 'Perishable', weight: 340, dimensions: '100x100x120 cm', declaredValue: 8500, incoterms: 'DDP', mode: 'Air', readyDate: '2026-05-25', specialInstructions: 'Pharma cold chain 2-8°C required.', deadline: '2026-05-21', status: 'Pending', createdAt: '2026-05-17T11:45:00.000Z', emailedCount: 0 },
 ];
 
+const SEED_BIDS = [
+  { id: 'bid-1', quoteId: 'q-1', forwarderId: 'fwd-1', price: 4200, currency: 'USD', transitTimeDays: 24, carrier: 'Maersk', validity: '2026-06-15', conditions: 'Subject to space availability and GRI.', status: 'pending', receivedAt: '2026-05-11T10:00:00Z', completeness: 95 },
+  { id: 'bid-2', quoteId: 'q-1', forwarderId: 'fwd-2', price: 3800, currency: 'USD', transitTimeDays: 32, carrier: 'MSC', validity: '2026-06-10', conditions: 'Standard terms apply. No hazardous cargo.', status: 'pending', receivedAt: '2026-05-11T14:30:00Z', completeness: 90 },
+  { id: 'bid-3', quoteId: 'q-1', forwarderId: 'fwd-3', price: 4800, currency: 'USD', transitTimeDays: 21, carrier: 'Hapag-Lloyd', validity: '2026-06-20', conditions: 'Premium express service.', status: 'pending', receivedAt: '2026-05-12T09:15:00Z', completeness: 100 },
+  { id: 'bid-4', quoteId: 'q-2', forwarderId: 'fwd-4', price: 1250, currency: 'USD', transitTimeDays: 4, carrier: 'Lufthansa Cargo', validity: '2026-05-25', conditions: 'Special handling fee included.', status: 'pending', receivedAt: '2026-05-15T08:20:00Z', completeness: 98 },
+  { id: 'bid-5', quoteId: 'q-2', forwarderId: 'fwd-1', price: 1100, currency: 'USD', transitTimeDays: 6, carrier: 'Emirates SkyCargo', validity: '2026-05-22', conditions: 'Transit via DXB.', status: 'pending', receivedAt: '2026-05-15T11:45:00Z', completeness: 85 },
+];
+
 // ── Init on first load ────────────────────────────────────────
 export function initStorage() {
   if (!localStorage.getItem(LS_FWD))    localStorage.setItem(LS_FWD,    JSON.stringify(SEED_FORWARDERS));
   if (!localStorage.getItem(LS_QUOTES)) localStorage.setItem(LS_QUOTES, JSON.stringify(SEED_QUOTES));
+  if (!localStorage.getItem(LS_BIDS))   localStorage.setItem(LS_BIDS,   JSON.stringify(SEED_BIDS));
+}
+
+// ── Bids & AI Scoring ─────────────────────────────────────────
+export function getBids(quoteId = null) {
+  let list = JSON.parse(localStorage.getItem(LS_BIDS) || '[]');
+  if (quoteId) list = list.filter(b => b.quoteId === quoteId);
+  
+  // Calculate AI Score if not present
+  if (list.length > 0) {
+    const minPrice = Math.min(...list.map(b => b.price));
+    const minDays  = Math.min(...list.map(b => b.transitTimeDays));
+    
+    list = list.map(b => {
+      const fwd = getForwarders().find(f => f.id === b.forwarderId);
+      const reliability = fwd ? fwd.reliability || 80 : 80;
+      
+      // Basic AI logic for scoring
+      const priceScore = (minPrice / b.price) * 40; // 40% weight
+      const timeScore  = (minDays / b.transitTimeDays) * 30; // 30% weight
+      const relScore   = (reliability / 100) * 20; // 20% weight
+      const compScore  = (b.completeness / 100) * 10; // 10% weight
+      
+      const totalScore = priceScore + timeScore + relScore + compScore;
+      
+      return {
+        ...b,
+        score: Math.round(totalScore),
+        isLowestPrice: b.price === minPrice,
+        isFastest: b.transitTimeDays === minDays,
+        forwarder: fwd
+      };
+    });
+    
+    // Sort by AI score descending
+    list.sort((a, b) => b.score - a.score);
+    if (list.length > 0) {
+      list[0].isBestValue = true; // Highest score is best value
+    }
+  }
+  return list;
+}
+
+export function updateBidStatus(id, status) {
+  const list = JSON.parse(localStorage.getItem(LS_BIDS) || '[]').map(b =>
+    b.id === id ? { ...b, status } : b
+  );
+  localStorage.setItem(LS_BIDS, JSON.stringify(list));
 }
 
 // ── Forwarders ────────────────────────────────────────────────
